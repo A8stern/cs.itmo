@@ -11,12 +11,15 @@ typedef struct {
 } Matrix;
 
 double getItem(Matrix* pSrc, size_t x, size_t y) {
+
     if (!pSrc) return 0;
     size_t offset = y * pSrc->col + x;
     return pSrc->elements[offset];
 }
 
 void setItem(Matrix* pSrc, size_t x, size_t y, double value) {
+
+
     if (!pSrc) return;
     size_t offset = y * pSrc->col + x;
     pSrc->elements[offset] = value;
@@ -67,6 +70,7 @@ void show_matrix(Matrix* pSrc) {
 void matrix_multiply(Matrix *A, Matrix *B, Matrix *C) { 
     if (!A || !B || !C) return;
     Matrix *temp = create_matrix(A->row, A->col);
+    if (!temp) return;
     for (int i = 0; i < A->row; i++)
         for (int j = 0; j < A->col; j++) 
             for (int k = 0; k < B->row; k++) {
@@ -74,7 +78,7 @@ void matrix_multiply(Matrix *A, Matrix *B, Matrix *C) {
                 setItem(temp, i, j, value);
             }
 
-    copy_matrix(temp, C); //comeback and check
+    copy_matrix(temp, C); 
     destroy_matrix(temp); 
 }
 
@@ -156,6 +160,7 @@ int house(Matrix *a) {
         matrix_multiply(q, P, q);
     }
     matrix_multiply(r, q, a);
+    destroy_matrix(r); destroy_matrix(P); destroy_matrix(E); destroy_matrix(q); destroy_matrix(v); destroy_matrix(u);
     return 0;
 }
 
@@ -180,6 +185,10 @@ int main(int argc, char *argv[]) {
     int n;
     fscanf_s(f, "%i", &n);
     Matrix *matrix = create_matrix(n, n);
+    if (!matrix) {
+        fclose(f);
+        return ERROR_OUT_OF_MEMORY;
+    }
     double* matrixElems = (double*) matrix -> elements;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
@@ -230,4 +239,4 @@ int main(int argc, char *argv[]) {
     destroy_matrix(matrix);
 
     return SUCCESS;
-}
+} //разделить на три функции
