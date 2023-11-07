@@ -7,169 +7,151 @@
 typedef struct {
     size_t col;
     size_t row;
-    double **elements;
+    double *elements;
 } Matrix;
 
+double getItem(Matrix* pSrc, size_t x, size_t y) {
+    if (!pSrc) return 0;
+    size_t offset = y * pSrc->col + x;
+    return pSrc->elements[offset];
+}
+
+void setItem(Matrix* pSrc, size_t x, size_t y, double value) {
+    if (!pSrc) return;
+    size_t offset = y * pSrc->col + x;
+    pSrc->elements[offset] = value;
+}
+
 void destroy_matrix(Matrix *matrix) {
-    for (size_t i = 0; i < matrix->row; i++) {
-        free(matrix->elements[i]);
-    }
+    if (!matrix) return;
     free(matrix->elements);
     free(matrix);
 }
 
 Matrix *create_matrix(size_t row, size_t col) {
     Matrix *A = (Matrix *) malloc(sizeof(Matrix));
-    if (A == NULL) {
-        return NULL;
-    }
+    if (!A) return NULL;
     A->row = row;
     A->col = col;
-    A->elements = (double **) malloc(row * sizeof(double *));
-    if (A->elements == NULL) {
-        free(A);
-        return NULL;
+    A->elements = (double *) malloc(row * col * sizeof(double));
+    if (!A->elements) {
+        free(A); return NULL;
     }
-    for (size_t i = 0; i < row; i++) {
-        A->elements[i] = (double *) malloc(col * sizeof(double));
-        if (A->elements[i] == NULL) {
-            destroy_matrix(A);
-            return NULL;
-        }
-    }
+    memset(A->elements, 0, row * col * sizeof(double));
     return A;
 }
 
-void copy_matrix(Matrix *A, Matrix *res) {
-    for (int h = 0; h < A->row; h++) {
-        for (int h1 = 0; h1 < A->col; h1++) {
-            res->elements[h][h1] = A->elements[h][h1];
+void copy_matrix(Matrix *pSrc, Matrix *pDst) {
+    if (!pSrc || !pDst) return;
+    double* matrixElemsSrc = (double*)pSrc->elements;
+    double* matrixElemsDst = (double*)pDst->elements;
+    for (int h = 0; h < pSrc->row; h++) {
+        for (int h1 = 0; h1 < pSrc->col; h1++) {
+            *matrixElemsDst++ = *matrixElemsSrc++;
         }
     }
 }
 
-void matrix_multiply(Matrix *A, Matrix *B, Matrix *C) {
-    Matrix *temp = create_matrix(A->row, A->col);
-    for (int i = 0; i < A->row; i++) {
-        for (int j = 0; j < A->row; j++) {
-            temp->elements[i][j] = 0;
-            for (int k = 0; k < A->row; k++) {
-                temp->elements[i][j] += A->elements[i][k] * B->elements[k][j];
-            }
+void show_matrix(Matrix* pSrc) {
+    if (!pSrc) return;
+    double* matrixElems = (double*)pSrc->elements;
+    for (size_t i = 0; i < pSrc->row; i++) {
+        for (size_t j = 0; j < pSrc->col; j++) {
+            fprintf(stdout, "%g ", *matrixElems++);
         }
+        fprintf(stdout, "\n");
     }
-    copy_matrix(temp, C);
-    destroy_matrix(temp);
+    fprintf(stdout, "\n");
+}
+
+void matrix_multiply(Matrix *A, Matrix *B, Matrix *C) { 
+    if (!A || !B || !C) return;
+    Matrix *temp = create_matrix(A->row, A->col);
+    for (int i = 0; i < A->row; i++)
+        for (int j = 0; j < A->col; j++) 
+            for (int k = 0; k < B->row; k++) {
+                double value = getItem(temp, i, j) + getItem(A, i, k) * getItem(B, k, j);
+                setItem(temp, i, j, value);
+            }
+
+    copy_matrix(temp, C); //comeback and check
+    destroy_matrix(temp); 
 }
 
 double find_norm(Matrix *A) {
+    if (!A) return -1; //-1 обработать
     double res = 0;
 
-    for (int i = 0; i < A->row; i++) {
-        for (int j = 0; j < A->col; j++) {
-            res += pow(A->elements[i][j], 2);
-        }
-    }
+    for (int i = 0; i < A->row; i++) 
+        for (int j = 0; j < A->col; j++) 
+            res += getItem(A, i, j) * getItem(A, i, j);
+
+        
     return sqrt(res);
 }
 
 Matrix *tri_matrix(size_t N) {
     Matrix *res = create_matrix(N, N);
-    if (res == NULL) {
-        return NULL;
-    }
+    if (!res) return NULL;
+    double* matrixElems = (double*)res->elements;
     for (int i = 0; i < N; i++) {
-        res->elements[i][i] = 1.;
+        *matrixElems = 1.;
+        matrixElems += N + 1;
     }
     return res;
 }
 
 int house(Matrix *a) {
-    double norm, n;
+    if (!a) return ERROR_DATA_INVALID;
+    double norm, n; Matrix* r = NULL, * P = NULL, * q = NULL, * E = NULL, * v = NULL, * u = NULL;
 
-    Matrix *r = create_matrix(a->row, a->col);
-    if (r == NULL){
-        return ERROR_OUT_OF_MEMORY;
+    if (!(r = create_matrix(a->row, a->col))) return ERROR_OUT_OF_MEMORY;
+    if (!(P = create_matrix(a->row, a->col))) {
+        destroy_matrix(r); return ERROR_OUT_OF_MEMORY;
     }
-    Matrix *P = create_matrix(a->row, a->col);
-    if (P == NULL){
-        destroy_matrix(r);
-        return ERROR_OUT_OF_MEMORY;
+    if (!(q = tri_matrix(a->col))) {
+        destroy_matrix(r); destroy_matrix(P); return ERROR_OUT_OF_MEMORY;
     }
-    Matrix *q = tri_matrix(a->col);
-    if (q == NULL){
-        destroy_matrix(r);
-        destroy_matrix(P);
-        return ERROR_OUT_OF_MEMORY;
+    if (!(E = tri_matrix(a->col))) {
+        destroy_matrix(r); destroy_matrix(P); destroy_matrix(q); return ERROR_OUT_OF_MEMORY;
     }
-    Matrix *E = tri_matrix(a->col);
-    if (E == NULL){
-        destroy_matrix(r);
-        destroy_matrix(P);
-        destroy_matrix(q);
-        return ERROR_OUT_OF_MEMORY;
+    if (!(v = create_matrix(a->row, a->col))) {
+        destroy_matrix(r); destroy_matrix(P); destroy_matrix(E); destroy_matrix(q); return ERROR_OUT_OF_MEMORY;
     }
-
-    Matrix *v = create_matrix(a->row, a->col);
-    if (v == NULL){
-        destroy_matrix(r);
-        destroy_matrix(P);
-        destroy_matrix(E);
-        destroy_matrix(q);
-        return ERROR_OUT_OF_MEMORY;
+    if (!(u = create_matrix(a->row, a->col))) {
+        destroy_matrix(r); destroy_matrix(P); destroy_matrix(E); destroy_matrix(q); destroy_matrix(v); return ERROR_OUT_OF_MEMORY;
     }
-    Matrix *u = create_matrix(a->row, a->col);
-    if (u == NULL){
-        destroy_matrix(r);
-        destroy_matrix(P);
-        destroy_matrix(E);
-        destroy_matrix(q);
-        destroy_matrix(v);
-        return ERROR_OUT_OF_MEMORY;
-    }
-
     copy_matrix(a, r);
-
     for (size_t i = 0; i < a->col; i++) {
-
         for (size_t j = 0; j < a->row; j++) {
-            v->elements[0][j] = 0;
-            u->elements[0][j] = 0;
+            setItem(v, 0, j, 0); setItem(u, 0, j, 0);
         }
-
         for (size_t j = i; j < a->row; j++) {
-            u->elements[0][j] = r->elements[j][i];
+            setItem(u, 0, j, getItem(r, j, i));
         }
-
         norm = find_norm(u);
-
-        if (u->elements[0][i] >= 0) {
+        if (getItem(u, 0, i) >= 0) {
             norm = -norm;
         }
-
         for (size_t j = i; j < a->row; j++) {
             if (j == i) {
-                v->elements[0][j] = u->elements[0][j] + norm;
+                setItem(v, 0, j, getItem(u, 0, j) + norm);
             } else {
-                v->elements[0][j] = u->elements[0][j];
+                setItem(v, 0, j, getItem(u, 0, j));
             }
         }
-
         n = find_norm(v);
-
-        if (n < 0.00000001)
-            continue;
+        if (n < 0.00000001) continue;
 
         for (size_t j = i; j < a->row; j++) {
-            v->elements[0][j] /= n;
+            setItem(v, 0, j, getItem(v, 0, j) / n);
         }
-
         for (size_t k = 0; k < a->row; k++) {
             for (size_t j = 0; j < a->row; j++) {
-                P->elements[k][j] = E->elements[k][j] - v->elements[0][k] * v->elements[0][j] * 2;
+                double value = getItem(E, k, j) - getItem(v, 0, k) * getItem(v, 0, j) * 2;
+                setItem(P, k, j, value);
             }
         }
-
         matrix_multiply(P, r, r);
         matrix_multiply(q, P, q);
     }
@@ -188,7 +170,7 @@ int main(int argc, char *argv[]) {
     }
 
     FILE *f;
-    f = fopen(argv[1], "r");
+    fopen_s(&f, argv[1], "r");
 
     if (f == NULL) {
         fprintf(stderr, "File %s not found\n", argv[1]);
@@ -196,12 +178,12 @@ int main(int argc, char *argv[]) {
     }
 
     int n;
-    fscanf(f, "%i", &n);
+    fscanf_s(f, "%i", &n);
     Matrix *matrix = create_matrix(n, n);
-
+    double* matrixElems = (double*) matrix -> elements;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
-            if (fscanf(f, "%lg", &matrix->elements[i][j]) != 1) {
+            if (fscanf_s(f, "%lg", matrixElems++) != 1) {
                 fclose(f);
                 destroy_matrix(matrix);
                 return ERROR_DATA_INVALID;
@@ -219,29 +201,29 @@ int main(int argc, char *argv[]) {
             return ERROR_OUT_OF_MEMORY;
         }
     }
-    f = fopen(argv[2], "w");
+    fopen_s(&f, argv[2], "w");
     if (f == NULL) {
         fprintf(stderr, "File %s not found\n", argv[2]);
         destroy_matrix(matrix);
         return ERROR_CANNOT_OPEN_FILE;
     }
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         if (i != n - 1) {
-            if (matrix->elements[i + 1][i] < 0.00001 && matrix->elements[i + 1][i] > -0.00001) {
-                fprintf(f, "%g\n", matrix->elements[i][i]);
+            if (getItem(matrix, i+1, i) < 0.00001 && getItem(matrix, i+1, i) > -0.00001) {
+                fprintf(f, "%g\n", getItem(matrix, i, i));
             } else {
-                double d = calc(matrix->elements[i][i], matrix->elements[i + 1][i], matrix->elements[i][i + 1],
-                                matrix->elements[i + 1][i + 1]);
-                fprintf(f, "%g +%g", (matrix->elements[i][i] + matrix->elements[i + 1][i + 1]) / 2, d);
+                double d = calc(getItem(matrix, i, i), getItem(matrix, i + 1, i), getItem(matrix, i, i + 1),
+                    getItem(matrix, i + 1, i + 1));
+                fprintf(f, "%g +%g", (getItem(matrix, i, i) + getItem(matrix, i + 1, i + 1)) / 2, d);
                 fprintf(f, "i\n");
-                fprintf(f, "%g -%g", (matrix->elements[i][i] + matrix->elements[i + 1][i + 1]) / 2, d);
+                fprintf(f, "%g -%g", (getItem(matrix, i, i) + getItem(matrix, i + 1, i + 1)) / 2, d);
                 fprintf(f, "i");
                 i++;
                 if (i < n - 1)
                     fprintf(f, "\n");
             }
         } else
-            fprintf(f, "%lf", matrix->elements[i][i]);
+            fprintf(f, "%lf", getItem(matrix, i, i));
     }
 
     fclose(f);
