@@ -28,7 +28,7 @@ void setItem(Matrix* pSrc, size_t x, size_t y, double value)
 void destroy_matrix(Matrix *matrix) 
 {
     if (!matrix) return;
-    free(matrix->elements);
+    if (matrix -> elements) free(matrix->elements);
     free(matrix);
 }
 
@@ -51,6 +51,7 @@ void copy_matrix(Matrix *pSrc, Matrix *pDst)
     if (!pSrc || !pDst) return;
     double* matrixElemsSrc = (double*)pSrc->elements;
     double* matrixElemsDst = (double*)pDst->elements;
+    if (!matrixElemsSrc || !matrixElemsDst) return;
     for (int h = 0; h < pSrc->row; h++) 
     {
         for (int h1 = 0; h1 < pSrc->col; h1++) 
@@ -96,7 +97,7 @@ void matrix_multiply(Matrix *A, Matrix *B, Matrix *C)
 
 double find_norm(Matrix *A) 
 {
-    if (!A) return -1; //-1 обработать
+    if (!A) return -1;
     double res = 0;
 
     for (int i = 0; i < A->row; i++) 
@@ -198,72 +199,67 @@ double calc(double a, double b, double c, double d)
     return sqrt(-(4 * (b * c) + (a - d) * (a - d))) / 2;
 }
 
-int main(int argc, char *argv[]) 
+Matrix* initMatrix(FILE* f, int* errorCode)
 {
-    if (argc != 3) 
-    {
-        fprintf(stderr, "Expected 2 arguments but found %i\n", argc - 1);
-        return ERROR_PARAMETER_INVALID;
+    if (!errorCode) return NULL;
+    if (!f) {
+        *errorCode = ERROR_PARAMETER_INVALID;
+        return NULL;
     }
-
-    FILE *f;
-    f = fopen(argv[1], "r");
-
-    if (f == NULL) 
-    {
-        fprintf(stderr, "File %s not found\n", argv[1]);
-        return ERROR_CANNOT_OPEN_FILE;
-    }
-
+    *errorCode = SUCCESS;
     int n;
     fscanf(f, "%i", &n);
-    Matrix *matrix = create_matrix(n, n);
-    if (!matrix) 
+    Matrix* matrix = create_matrix(n, n);
+    if (!matrix)
     {
         fclose(f);
-        return ERROR_OUT_OF_MEMORY;
+        *errorCode = ERROR_OUT_OF_MEMORY;
+        return NULL;
     }
-    double* matrixElems = (double*) matrix -> elements;
-    for (int i = 0; i < n; i++) 
+    double* matrixElems = (double*)matrix->elements;
+    for (int i = 0; i < n; i++)
     {
-        for (int j = 0; j < n; j++) 
+        for (int j = 0; j < n; j++)
         {
-            if (fscanf(f, "%lg", matrixElems++) != 1) 
+            if (fscanf(f, "%lg", matrixElems++) != 1)
             {
                 fclose(f);
                 destroy_matrix(matrix);
-                return ERROR_DATA_INVALID;
+                *errorCode = ERROR_DATA_INVALID;
+                return NULL;
             }
         }
     }
     fclose(f);
     int check;
 
-    for (int k = 0; k < 75 * n + 100; k++) 
+    for (int k = 0; k < 75 * n + 100; k++)
     {
         check = house(matrix);
         if (check == ERROR_OUT_OF_MEMORY)
         {
             fprintf(stderr, "Out of memory");
             destroy_matrix(matrix);
-            return ERROR_OUT_OF_MEMORY;
+            *errorCode = ERROR_OUT_OF_MEMORY;
+            return NULL;
         }
     }
-    f = fopen(argv[2], "w");
-    if (f == NULL) 
+    return matrix;
+}
+
+int printEigenvalues(FILE* f, Matrix* matrix) 
+{
+    if (!f || !matrix) return ERROR_DATA_INVALID;
+    
+    for (size_t i = 0; i < matrix -> row; i++)
     {
-        fprintf(stderr, "File %s not found\n", argv[2]);
-        destroy_matrix(matrix);
-        return ERROR_CANNOT_OPEN_FILE;
-    }
-    for (size_t i = 0; i < n; i++) 
-    {
-        if (i != n - 1) 
+        if (i != matrix->row - 1)
         {
-            if (getItem(matrix, i+1, i) < 0.00001 && getItem(matrix, i+1, i) > -0.00001) 
+            if (getItem(matrix, i + 1, i) < 0.00001 && getItem(matrix, i + 1, i) > -0.00001)
             {
                 fprintf(f, "%g\n", getItem(matrix, i, i));
-            } else 
+            }
+            else
             {
                 double d = calc(getItem(matrix, i, i), getItem(matrix, i + 1, i), getItem(matrix, i, i + 1),
                     getItem(matrix, i + 1, i + 1));
@@ -272,15 +268,46 @@ int main(int argc, char *argv[])
                 fprintf(f, "%g -%g", (getItem(matrix, i, i) + getItem(matrix, i + 1, i + 1)) / 2, d);
                 fprintf(f, "i");
                 i++;
-                if (i < n - 1)
+                if (i < matrix->row - 1)
                     fprintf(f, "\n");
             }
-        } else
+        }
+        else
             fprintf(f, "%lf", getItem(matrix, i, i));
     }
 
     fclose(f);
     destroy_matrix(matrix);
-
     return SUCCESS;
-} //разделить на три функции
+}
+
+int main(int argc, char *argv[]) 
+{
+    if (argc != 3)
+    {
+        fprintf(stderr, "Expected 2 arguments but found %i\n", argc - 1);
+        return ERROR_PARAMETER_INVALID;
+    }
+    FILE* f;
+    f = fopen(argv[1], "r");
+
+    if (f == NULL)
+    {
+        fprintf(stderr, "File %s not found\n", argv[1]);
+        return ERROR_CANNOT_OPEN_FILE;
+    }
+
+    int errorCode = ERROR_PARAMETER_INVALID;
+    Matrix* matrix = initMatrix(f, &errorCode);
+    if (!matrix) return errorCode;
+    
+    f = fopen(argv[2], "w");
+    if (f == NULL) 
+    {
+        fprintf(stderr, "File %s not found\n", argv[2]);
+        destroy_matrix(matrix);
+        return ERROR_CANNOT_OPEN_FILE;
+    }
+    
+    return printEigenvalues(f, matrix);
+} 
